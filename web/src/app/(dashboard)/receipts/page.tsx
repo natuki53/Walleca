@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 import { ReceiptUploader } from '@/components/receipts/ReceiptUploader';
 import { ReceiptList } from '@/components/receipts/ReceiptList';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +28,7 @@ export default function ReceiptsPage() {
   const [to, setTo] = useState('');
   const [sortBy, setSortBy] = useState<ReceiptSortBy>('createdAt');
   const [sortOrder, setSortOrder] = useState<ReceiptSortOrder>('desc');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['receipts', { ocrStatus, from, to, sortBy, sortOrder }],
@@ -52,6 +54,22 @@ export default function ReceiptsPage() {
       { pending: 0, processing: 0, success: 0, failed: 0 } as Record<OcrStatus, number>
     );
   }, [receipts]);
+  const activeFilterCount = [
+    ocrStatus !== 'all',
+    Boolean(from),
+    Boolean(to),
+    sortBy !== 'createdAt',
+    sortOrder !== 'desc',
+  ].filter(Boolean).length;
+  const hasActiveFilters = activeFilterCount > 0;
+  const resetFilters = () => {
+    setOcrStatus('all');
+    setFrom('');
+    setTo('');
+    setSortBy('createdAt');
+    setSortOrder('desc');
+    setIsFilterOpen(false);
+  };
 
   return (
     <div className="space-y-6">
@@ -61,66 +79,92 @@ export default function ReceiptsPage() {
 
       <Card>
         <CardContent className="p-4 space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">OCRステータス</p>
-              <Select
-                value={ocrStatus}
-                onValueChange={(value) => setOcrStatus(value as 'all' | OcrStatus)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">すべて</SelectItem>
-                  <SelectItem value="pending">処理待ち</SelectItem>
-                  <SelectItem value="processing">処理中</SelectItem>
-                  <SelectItem value="success">完了</SelectItem>
-                  <SelectItem value="failed">失敗</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">期間（開始）</p>
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">期間（終了）</p>
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">並び替え項目</p>
-              <Select value={sortBy} onValueChange={(value) => setSortBy(value as ReceiptSortBy)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="createdAt">アップロード日時</SelectItem>
-                  <SelectItem value="ocrStatus">OCRステータス</SelectItem>
-                  <SelectItem value="extractedDate">抽出日付</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">並び順</p>
-              <Select
-                value={sortOrder}
-                onValueChange={(value) => setSortOrder(value as ReceiptSortOrder)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="desc">新しい順</SelectItem>
-                  <SelectItem value="asc">古い順</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={isFilterOpen ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setIsFilterOpen((prev) => !prev)}
+            >
+              <SlidersHorizontal className="mr-2 h-4 w-4" />
+              フィルター
+              {isFilterOpen ? (
+                <ChevronUp className="ml-2 h-4 w-4" />
+              ) : (
+                <ChevronDown className="ml-2 h-4 w-4" />
+              )}
+            </Button>
+            <Badge variant={hasActiveFilters ? 'default' : 'outline'}>
+              適用中 {activeFilterCount}
+            </Badge>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" className="ml-auto" onClick={resetFilters}>
+                フィルタをリセット
+              </Button>
+            )}
           </div>
+
+          {isFilterOpen && (
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">OCRステータス</p>
+                <Select
+                  value={ocrStatus}
+                  onValueChange={(value) => setOcrStatus(value as 'all' | OcrStatus)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    <SelectItem value="pending">処理待ち</SelectItem>
+                    <SelectItem value="processing">処理中</SelectItem>
+                    <SelectItem value="success">完了</SelectItem>
+                    <SelectItem value="failed">失敗</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">期間（開始）</p>
+                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">期間（終了）</p>
+                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">並び替え項目</p>
+                <Select value={sortBy} onValueChange={(value) => setSortBy(value as ReceiptSortBy)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="createdAt">アップロード日時</SelectItem>
+                    <SelectItem value="ocrStatus">OCRステータス</SelectItem>
+                    <SelectItem value="extractedDate">抽出日付</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">並び順</p>
+                <Select
+                  value={sortOrder}
+                  onValueChange={(value) => setSortOrder(value as ReceiptSortOrder)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="desc">新しい順</SelectItem>
+                    <SelectItem value="asc">古い順</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">合計 {data?.meta?.total ?? receipts.length} 件</Badge>
@@ -128,20 +172,6 @@ export default function ReceiptsPage() {
             <Badge variant="outline">処理中 {statusSummary.processing}</Badge>
             <Badge variant="outline">完了 {statusSummary.success}</Badge>
             <Badge variant="outline">失敗 {statusSummary.failed}</Badge>
-
-            <Button
-              variant="ghost"
-              className="ml-auto"
-              onClick={() => {
-                setOcrStatus('all');
-                setFrom('');
-                setTo('');
-                setSortBy('createdAt');
-                setSortOrder('desc');
-              }}
-            >
-              フィルタをリセット
-            </Button>
           </div>
         </CardContent>
       </Card>
