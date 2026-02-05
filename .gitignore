@@ -16,7 +16,12 @@ Thumbs.db
 node_modules/
 dist/
 build/
+.next/
+out/
+.turbo
+*.tsbuildinfo
 npm-debug.log*
+*.log
 
 # Test
 coverage/
