@@ -18,7 +18,8 @@ export interface CreateSubscriptionInput {
   serviceName: string;
   amount: number;
   billingCycle?: BillingCycle;
-  nextPaymentDate: string;
+  registrationDate?: string;
+  nextPaymentDate?: string;
   category?: string;
   status?: SubscriptionStatus;
   memo?: string;

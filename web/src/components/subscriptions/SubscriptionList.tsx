@@ -31,6 +31,7 @@ import { SubscriptionForm, SubscriptionFormData } from './SubscriptionForm';
 
 interface SubscriptionListProps {
   subscriptions: Subscription[];
+  categoryOptions: string[];
 }
 
 const statusLabels: Record<SubscriptionStatus, string> = {
@@ -58,14 +59,14 @@ function toUpdateInput(data: SubscriptionFormData): UpdateSubscriptionInput {
     serviceName: data.serviceName.trim(),
     amount: data.amount,
     billingCycle: data.billingCycle,
-    nextPaymentDate: data.nextPaymentDate,
+    ...(data.nextPaymentDate && { nextPaymentDate: data.nextPaymentDate }),
     status: data.status,
     category: category ? category : null,
     memo: memo ? memo : null,
   };
 }
 
-export function SubscriptionList({ subscriptions }: SubscriptionListProps) {
+export function SubscriptionList({ subscriptions, categoryOptions }: SubscriptionListProps) {
   const queryClient = useQueryClient();
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
   const [deletingSubscription, setDeletingSubscription] = useState<Subscription | null>(null);
@@ -180,6 +181,7 @@ export function SubscriptionList({ subscriptions }: SubscriptionListProps) {
         <SubscriptionForm
           open={!!editingSubscription}
           onClose={() => setEditingSubscription(null)}
+          categoryOptions={categoryOptions}
           subscription={editingSubscription}
           onSubmit={async (data) => {
             await updateMutation.mutateAsync({

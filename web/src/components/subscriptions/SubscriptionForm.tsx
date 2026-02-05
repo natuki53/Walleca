@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -27,7 +28,14 @@ const subscriptionSchema = z.object({
   serviceName: z.string().min(1, 'サービス名を入力してください').max(255),
   amount: z.coerce.number().positive('金額は正の数で入力してください'),
   billingCycle: z.enum(['monthly', 'yearly']),
-  nextPaymentDate: z.string().min(1, '次回支払日を入力してください'),
+  registrationDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, '日付はYYYY-MM-DD形式で入力してください')
+    .optional(),
+  nextPaymentDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, '日付はYYYY-MM-DD形式で入力してください')
+    .optional(),
   category: z.string().max(100).optional(),
   status: z.enum(['active', 'paused', 'cancelled']),
   memo: z.string().optional(),
@@ -39,6 +47,7 @@ interface SubscriptionFormProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (data: SubscriptionFormData) => Promise<void>;
+  categoryOptions: string[];
   subscription?: Subscription;
   isLoading?: boolean;
 }
@@ -58,6 +67,7 @@ export function SubscriptionForm({
   open,
   onClose,
   onSubmit,
+  categoryOptions,
   subscription,
   isLoading,
 }: SubscriptionFormProps) {
@@ -74,9 +84,8 @@ export function SubscriptionForm({
       serviceName: subscription?.serviceName || '',
       amount: subscription?.amount || undefined,
       billingCycle: subscription?.billingCycle || 'monthly',
-      nextPaymentDate:
-        subscription?.nextPaymentDate?.slice(0, 10) ||
-        new Date().toISOString().slice(0, 10),
+      registrationDate: subscription ? undefined : new Date().toISOString().slice(0, 10),
+      nextPaymentDate: subscription?.nextPaymentDate?.slice(0, 10),
       category: subscription?.category || '',
       status: subscription?.status || 'active',
       memo: subscription?.memo || '',
@@ -88,9 +97,8 @@ export function SubscriptionForm({
       serviceName: subscription?.serviceName || '',
       amount: subscription?.amount || undefined,
       billingCycle: subscription?.billingCycle || 'monthly',
-      nextPaymentDate:
-        subscription?.nextPaymentDate?.slice(0, 10) ||
-        new Date().toISOString().slice(0, 10),
+      registrationDate: subscription ? undefined : new Date().toISOString().slice(0, 10),
+      nextPaymentDate: subscription?.nextPaymentDate?.slice(0, 10),
       category: subscription?.category || '',
       status: subscription?.status || 'active',
       memo: subscription?.memo || '',
@@ -108,6 +116,9 @@ export function SubscriptionForm({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{subscription ? 'サブスクを編集' : 'サブスクを追加'}</DialogTitle>
+          <DialogDescription className="sr-only">
+            サブスクリプションの情報を入力して保存します。
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(handleFormSubmit)}>
@@ -177,22 +188,49 @@ export function SubscriptionForm({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="nextPaymentDate">次回支払日</Label>
-              <Input id="nextPaymentDate" type="date" {...register('nextPaymentDate')} />
-              {errors.nextPaymentDate && (
-                <p className="text-sm text-destructive">{errors.nextPaymentDate.message}</p>
-              )}
-            </div>
+            {subscription ? (
+              <div className="space-y-2">
+                <Label htmlFor="nextPaymentDate">次回支払日</Label>
+                <Input id="nextPaymentDate" type="date" {...register('nextPaymentDate')} />
+                {errors.nextPaymentDate && (
+                  <p className="text-sm text-destructive">{errors.nextPaymentDate.message}</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="registrationDate">登録日</Label>
+                <Input id="registrationDate" type="date" {...register('registrationDate')} />
+                {errors.registrationDate && (
+                  <p className="text-sm text-destructive">{errors.registrationDate.message}</p>
+                )}
+                <p className="text-sm text-muted-foreground">
+                  登録日を基準に次回支払日を自動設定します。
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="category">カテゴリ（任意）</Label>
-              <Input
-                id="category"
-                type="text"
-                placeholder="動画配信"
-                {...register('category')}
-              />
+              <input type="hidden" {...register('category')} />
+              <Select
+                value={watch('category') || '__none__'}
+                onValueChange={(value) => setValue('category', value === '__none__' ? '' : value)}
+              >
+                <SelectTrigger id="category">
+                  <SelectValue placeholder="カテゴリを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">未選択</SelectItem>
+                  {categoryOptions.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                カテゴリは設定画面から追加・編集できます。
+              </p>
             </div>
 
             <div className="space-y-2">

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp, Plus, SlidersHorizontal } from 'lucide-react';
 import { subscriptionsApi } from '@/api/subscriptions';
+import { subscriptionCategoriesApi } from '@/api/subscriptionCategories';
 import { SubscriptionForm, SubscriptionFormData } from '@/components/subscriptions/SubscriptionForm';
 import { SubscriptionList } from '@/components/subscriptions/SubscriptionList';
 import { toast } from '@/hooks/useToast';
@@ -11,7 +12,6 @@ import { BillingCycle, CreateSubscriptionInput, SubscriptionStatus } from '@/typ
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -28,7 +28,7 @@ function toCreateInput(data: SubscriptionFormData): CreateSubscriptionInput {
     serviceName: data.serviceName.trim(),
     amount: data.amount,
     billingCycle: data.billingCycle,
-    nextPaymentDate: data.nextPaymentDate,
+    ...(data.registrationDate && { registrationDate: data.registrationDate }),
     status: data.status,
     ...(category && { category }),
     ...(memo && { memo }),
@@ -46,6 +46,10 @@ export default function SubscriptionsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | SubscriptionStatus>('all');
   const [billingCycleFilter, setBillingCycleFilter] = useState<'all' | BillingCycle>('all');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const { data: categoryResponse } = useQuery({
+    queryKey: ['subscription-categories'],
+    queryFn: () => subscriptionCategoriesApi.getAll(),
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['subscriptions', { statusFilter, billingCycleFilter, categoryFilter }],
@@ -82,6 +86,18 @@ export default function SubscriptionsPage() {
 
   const subscriptions = useMemo(() => data?.data ?? [], [data?.data]);
   const summary = summaryResponse?.data;
+  const categoryOptions = useMemo(
+    () => (categoryResponse?.data ?? []).map((category) => category.name),
+    [categoryResponse?.data]
+  );
+  const availableCategoryOptions = useMemo(() => {
+    const fromSubscriptions = subscriptions
+      .map((subscription) => subscription.category?.trim() || '')
+      .filter((category): category is string => category.length > 0);
+    return Array.from(new Set([...categoryOptions, ...fromSubscriptions])).sort((a, b) =>
+      a.localeCompare(b, 'ja')
+    );
+  }, [categoryOptions, subscriptions]);
 
   const filteredMonthlyTotal = useMemo(() => {
     return subscriptions.reduce((sum, subscription) => {
@@ -225,11 +241,22 @@ export default function SubscriptionsPage() {
 
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">カテゴリ</p>
-                <Input
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  placeholder="動画配信"
-                />
+                <Select
+                  value={categoryFilter || 'all'}
+                  onValueChange={(value) => setCategoryFilter(value === 'all' ? '' : value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    {availableCategoryOptions.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}
@@ -284,12 +311,16 @@ export default function SubscriptionsPage() {
       {isLoading ? (
         <div className="text-center py-10 text-muted-foreground">読み込み中...</div>
       ) : (
-        <SubscriptionList subscriptions={subscriptions} />
+        <SubscriptionList
+          subscriptions={subscriptions}
+          categoryOptions={availableCategoryOptions}
+        />
       )}
 
       <SubscriptionForm
         open={isFormOpen}
         onClose={() => setIsFormOpen(false)}
+        categoryOptions={availableCategoryOptions}
         onSubmit={async (formData) => {
           await createMutation.mutateAsync(toCreateInput(formData));
         }}
