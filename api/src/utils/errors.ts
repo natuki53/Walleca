@@ -23,13 +23,16 @@ export class AppError extends Error {
   }
 
   toJSON() {
+    const errorObj: { code: ErrorCode; message: string; details?: unknown } = {
+      code: this.code,
+      message: this.message,
+    };
+    if (this.details) {
+      errorObj.details = this.details;
+    }
     return {
       success: false,
-      error: {
-        code: this.code,
-        message: this.message,
-        ...(this.details && { details: this.details }),
-      },
+      error: errorObj,
     };
   }
 }
