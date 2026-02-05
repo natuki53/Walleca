@@ -6,7 +6,16 @@ import { Errors } from '../utils/errors';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads';
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || '10485760'); // 10MB
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'image/heic-sequence',
+  'image/heif-sequence',
+];
+const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'];
 
 // アップロードディレクトリ作成
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -32,10 +41,20 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
-  if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+  const mimeType = (file.mimetype || '').toLowerCase();
+  const extension = path.extname(file.originalname).toLowerCase();
+  const isAllowedMimeType = ALLOWED_MIME_TYPES.includes(mimeType);
+  const isAllowedExtension = ALLOWED_EXTENSIONS.includes(extension);
+  const isGenericMimeType = mimeType === '' || mimeType === 'application/octet-stream';
+  const isImageMimeType = mimeType.startsWith('image/');
+
+  if (
+    isAllowedMimeType ||
+    (isAllowedExtension && (isImageMimeType || isGenericMimeType))
+  ) {
     cb(null, true);
   } else {
-    cb(Errors.fileTypeNotAllowed(ALLOWED_MIME_TYPES));
+    cb(Errors.fileTypeNotAllowed([...ALLOWED_MIME_TYPES, ...ALLOWED_EXTENSIONS]));
   }
 };
 
@@ -51,4 +70,5 @@ export const uploadConfig = {
   uploadDir: UPLOAD_DIR,
   maxFileSize: MAX_FILE_SIZE,
   allowedMimeTypes: ALLOWED_MIME_TYPES,
+  allowedExtensions: ALLOWED_EXTENSIONS,
 };

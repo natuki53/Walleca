@@ -5,6 +5,9 @@ import { addOcrJob } from '../config/queue';
 import { UpdateReceiptInput, ConfirmReceiptInput } from '../validators/receipt.validator';
 import { OcrStatus, Prisma } from '@prisma/client';
 import fs from 'fs/promises';
+import path from 'path';
+import sharp from 'sharp';
+import { logger } from '../utils/logger';
 
 export interface ReceiptListParams {
   page: number;
@@ -32,17 +35,88 @@ const receiptSelect = {
   updatedAt: true,
 };
 
+const HEIF_MIME_TYPES = new Set([
+  'image/heic',
+  'image/heif',
+  'image/heic-sequence',
+  'image/heif-sequence',
+]);
+const HEIF_EXTENSIONS = new Set(['.heic', '.heif']);
+
+interface NormalizedUploadFile {
+  path: string;
+  size: number;
+  mimeType: string;
+}
+
+function isHeifUpload(file: Express.Multer.File): boolean {
+  const mimeType = (file.mimetype || '').toLowerCase();
+  const extension = path.extname(file.originalname).toLowerCase();
+
+  return HEIF_MIME_TYPES.has(mimeType) || HEIF_EXTENSIONS.has(extension);
+}
+
 export class ReceiptService {
+  private async normalizeUploadFile(file: Express.Multer.File): Promise<NormalizedUploadFile> {
+    if (!isHeifUpload(file)) {
+      return {
+        path: file.path,
+        size: file.size,
+        mimeType: file.mimetype,
+      };
+    }
+
+    const parsedPath = path.parse(file.path);
+    const convertedPath = path.join(parsedPath.dir, `${parsedPath.name}.jpg`);
+
+    try {
+      await sharp(file.path, { failOn: 'none' })
+        .rotate()
+        .jpeg({
+          quality: 95,
+          chromaSubsampling: '4:4:4',
+        })
+        .toFile(convertedPath);
+
+      const stats = await fs.stat(convertedPath);
+      await fs.unlink(file.path).catch(() => undefined);
+
+      logger.info('HEIC/HEIF converted to JPEG on upload', {
+        source: file.path,
+        converted: convertedPath,
+      });
+
+      return {
+        path: convertedPath,
+        size: stats.size,
+        mimeType: 'image/jpeg',
+      };
+    } catch (error) {
+      logger.warn('HEIC/HEIF conversion failed on upload, fallback to original file', {
+        path: file.path,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      return {
+        path: file.path,
+        size: file.size,
+        mimeType: file.mimetype,
+      };
+    }
+  }
+
   async upload(
     userId: string,
     file: Express.Multer.File
   ) {
+    const normalizedFile = await this.normalizeUploadFile(file);
+
     const receipt = await prisma.receipt.create({
       data: {
         userId,
-        imagePath: file.path,
-        imageSize: file.size,
-        mimeType: file.mimetype,
+        imagePath: normalizedFile.path,
+        imageSize: normalizedFile.size,
+        mimeType: normalizedFile.mimeType,
         ocrStatus: 'pending',
       },
       select: receiptSelect,
@@ -51,7 +125,7 @@ export class ReceiptService {
     // OCRジョブをキューに追加
     await addOcrJob({
       receiptId: receipt.id,
-      imagePath: file.path,
+      imagePath: normalizedFile.path,
       userId,
     });
 
