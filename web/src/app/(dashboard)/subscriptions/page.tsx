@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, SlidersHorizontal } from 'lucide-react';
 import { subscriptionsApi } from '@/api/subscriptions';
 import { SubscriptionForm, SubscriptionFormData } from '@/components/subscriptions/SubscriptionForm';
 import { SubscriptionList } from '@/components/subscriptions/SubscriptionList';
 import { toast } from '@/hooks/useToast';
 import { BillingCycle, CreateSubscriptionInput, SubscriptionStatus } from '@/types/subscription';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -41,6 +42,7 @@ function toMonthlyAmount(amount: number, cycle: BillingCycle): number {
 export default function SubscriptionsPage() {
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | SubscriptionStatus>('all');
   const [billingCycleFilter, setBillingCycleFilter] = useState<'all' | BillingCycle>('all');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -93,6 +95,18 @@ export default function SubscriptionsPage() {
       currency: 'JPY',
     }).format(amount);
   };
+  const activeFilterCount = [
+    statusFilter !== 'all',
+    billingCycleFilter !== 'all',
+    Boolean(categoryFilter.trim()),
+  ].filter(Boolean).length;
+  const hasActiveFilters = activeFilterCount > 0;
+  const resetFilters = () => {
+    setStatusFilter('all');
+    setBillingCycleFilter('all');
+    setCategoryFilter('');
+    setIsFilterOpen(false);
+  };
 
   return (
     <div className="space-y-6">
@@ -143,70 +157,82 @@ export default function SubscriptionsPage() {
       </div>
 
       <Card>
-        <CardContent className="p-4">
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">状態</p>
-              <Select
-                value={statusFilter}
-                onValueChange={(value) =>
-                  setStatusFilter(value as 'all' | SubscriptionStatus)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">すべて</SelectItem>
-                  <SelectItem value="active">有効</SelectItem>
-                  <SelectItem value="paused">停止</SelectItem>
-                  <SelectItem value="cancelled">解約</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">支払周期</p>
-              <Select
-                value={billingCycleFilter}
-                onValueChange={(value) =>
-                  setBillingCycleFilter(value as 'all' | BillingCycle)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">すべて</SelectItem>
-                  <SelectItem value="monthly">月額</SelectItem>
-                  <SelectItem value="yearly">年額</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">カテゴリ</p>
-              <Input
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                placeholder="動画配信"
-              />
-            </div>
-
-            <div className="flex items-end">
-              <Button
-                variant="ghost"
-                className="w-full"
-                onClick={() => {
-                  setStatusFilter('all');
-                  setBillingCycleFilter('all');
-                  setCategoryFilter('');
-                }}
-              >
+        <CardContent className="p-4 space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={isFilterOpen ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setIsFilterOpen((prev) => !prev)}
+            >
+              <SlidersHorizontal className="mr-2 h-4 w-4" />
+              フィルター
+              {isFilterOpen ? (
+                <ChevronUp className="ml-2 h-4 w-4" />
+              ) : (
+                <ChevronDown className="ml-2 h-4 w-4" />
+              )}
+            </Button>
+            <Badge variant={hasActiveFilters ? 'default' : 'outline'}>
+              適用中 {activeFilterCount}
+            </Badge>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" className="ml-auto" onClick={resetFilters}>
                 フィルタをリセット
               </Button>
-            </div>
+            )}
           </div>
+
+          {isFilterOpen && (
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">状態</p>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) =>
+                    setStatusFilter(value as 'all' | SubscriptionStatus)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    <SelectItem value="active">有効</SelectItem>
+                    <SelectItem value="paused">停止</SelectItem>
+                    <SelectItem value="cancelled">解約</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">支払周期</p>
+                <Select
+                  value={billingCycleFilter}
+                  onValueChange={(value) =>
+                    setBillingCycleFilter(value as 'all' | BillingCycle)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    <SelectItem value="monthly">月額</SelectItem>
+                    <SelectItem value="yearly">年額</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">カテゴリ</p>
+                <Input
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  placeholder="動画配信"
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
