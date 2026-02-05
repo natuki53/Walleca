@@ -6,6 +6,8 @@ import {
   registerSchema,
   loginSchema,
   refreshSchema,
+  updateMeSchema,
+  changePasswordSchema,
 } from '../validators/auth.validator';
 
 const router = Router();
@@ -43,6 +45,22 @@ router.get(
   '/me',
   authMiddleware,
   authController.me.bind(authController)
+);
+
+// PATCH /v1/auth/me - ユーザー設定更新
+router.patch(
+  '/me',
+  authMiddleware,
+  validate(updateMeSchema),
+  authController.updateMe.bind(authController)
+);
+
+// PATCH /v1/auth/password - パスワード更新
+router.patch(
+  '/password',
+  authMiddleware,
+  validate(changePasswordSchema),
+  authController.changePassword.bind(authController)
 );
 
 export default router;

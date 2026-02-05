@@ -1,7 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service';
 import { sendSuccess } from '../utils/response';
-import { RegisterInput, LoginInput, RefreshInput } from '../validators/auth.validator';
+import {
+  RegisterInput,
+  LoginInput,
+  RefreshInput,
+  UpdateMeInput,
+  ChangePasswordInput,
+} from '../validators/auth.validator';
 
 export class AuthController {
   async register(
@@ -64,6 +70,32 @@ export class AuthController {
     try {
       const user = await authService.getMe(req.user!.userId);
       sendSuccess(res, user);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateMe(
+    req: Request<{}, {}, UpdateMeInput>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const user = await authService.updateMe(req.user!.userId, req.body);
+      sendSuccess(res, user);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async changePassword(
+    req: Request<{}, {}, ChangePasswordInput>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      await authService.changePassword(req.user!.userId, req.body);
+      sendSuccess(res, { message: 'パスワードを更新しました' });
     } catch (error) {
       next(error);
     }

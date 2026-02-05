@@ -8,7 +8,12 @@ import {
   TokenPayload,
 } from '../utils/jwt';
 import { Errors } from '../utils/errors';
-import { RegisterInput, LoginInput } from '../validators/auth.validator';
+import {
+  RegisterInput,
+  LoginInput,
+  UpdateMeInput,
+  ChangePasswordInput,
+} from '../validators/auth.validator';
 
 export interface AuthResult {
   user: {
@@ -142,6 +147,60 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  async updateMe(userId: string, input: UpdateMeInput) {
+    const existing = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw Errors.notFound('ユーザー');
+    }
+
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        displayName: input.displayName,
+      },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async changePassword(userId: string, input: ChangePasswordInput): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        passwordHash: true,
+      },
+    });
+
+    if (!user) {
+      throw Errors.notFound('ユーザー');
+    }
+
+    const isValidCurrentPassword = await verifyPassword(
+      input.currentPassword,
+      user.passwordHash
+    );
+
+    if (!isValidCurrentPassword) {
+      throw Errors.validation('現在のパスワードが正しくありません');
+    }
+
+    const passwordHash = await hashPassword(input.newPassword);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
   }
 
   private async generateTokens(userId: string, email: string) {
