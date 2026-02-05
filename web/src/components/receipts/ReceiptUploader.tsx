@@ -4,15 +4,29 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Upload, X } from 'lucide-react';
+import { isAxiosError } from 'axios';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { receiptsApi } from '@/api/receipts';
+import { uploadClientConfig } from '@/config/upload';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 
-const ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'];
-const HEIC_EXTENSIONS = ['.heic', '.heif'];
-const HEIC_MIME_TYPES = ['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'];
+const ALLOWED_IMAGE_EXTENSIONS = uploadClientConfig.allowedExtensions;
+const ALLOWED_IMAGE_MIME_TYPES = uploadClientConfig.allowedMimeTypes;
+const HEIC_EXTENSIONS = uploadClientConfig.heicExtensions;
+const HEIC_MIME_TYPES = uploadClientConfig.heicMimeTypes;
+const FILE_INPUT_ACCEPT = uploadClientConfig.fileInputAccept;
+const ALLOWED_FORMATS_LABEL = ALLOWED_IMAGE_EXTENSIONS
+  .map((extension) => extension.replace('.', '').toUpperCase())
+  .join(' / ');
+
+function formatMegabytes(sizeInBytes: number) {
+  const sizeInMegabytes = sizeInBytes / 1024 / 1024;
+  return Number.isInteger(sizeInMegabytes)
+    ? `${sizeInMegabytes}MB`
+    : `${sizeInMegabytes.toFixed(1)}MB`;
+}
 
 function hasAllowedImageExtension(fileName: string) {
   const lower = fileName.toLowerCase();
@@ -24,10 +38,14 @@ function hasHeicExtension(fileName: string) {
   return HEIC_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
+function hasAllowedImageMimeType(mimeType: string) {
+  return ALLOWED_IMAGE_MIME_TYPES.includes(mimeType);
+}
+
 function isSupportedImageFile(file: File) {
   const mimeType = (file.type || '').toLowerCase();
 
-  if (mimeType.startsWith('image/')) {
+  if (hasAllowedImageMimeType(mimeType)) {
     return true;
   }
 
@@ -95,6 +113,17 @@ function describeConversionError(error: unknown): string {
   } catch {
     return '不明なエラー';
   }
+}
+
+function describeUploadError(error: unknown): string {
+  if (!isAxiosError(error)) {
+    return 'アップロードに失敗しました';
+  }
+
+  const message = (error.response?.data as { error?: { message?: unknown } } | undefined)?.error?.message;
+  return typeof message === 'string' && message.trim()
+    ? message
+    : 'アップロードに失敗しました';
 }
 
 async function convertHeicToJpegWithHeicTo(candidates: Blob[]): Promise<Blob> {
@@ -214,16 +243,24 @@ export function ReceiptUploader() {
       toast({ title: 'レシートをアップロードしました' });
       resetUploader();
     },
-    onError: () => {
-      toast({ title: 'アップロードに失敗しました', variant: 'destructive' });
+    onError: (error) => {
+      toast({ title: describeUploadError(error), variant: 'destructive' });
     },
   });
 
   const handleFile = useCallback(
     async (file: File) => {
+      if (file.size > uploadClientConfig.maxFileSizeBytes) {
+        toast({
+          title: `ファイルサイズは ${formatMegabytes(uploadClientConfig.maxFileSizeBytes)} 以下にしてください`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
       if (!isSupportedImageFile(file)) {
         toast({
-          title: '対応形式は JPG / PNG / WebP / HEIC / HEIF です',
+          title: `対応形式は ${ALLOWED_FORMATS_LABEL} です`,
           variant: 'destructive',
         });
         return;
@@ -321,7 +358,7 @@ export function ReceiptUploader() {
             <label>
               <input
                 type="file"
-                accept="image/*,.heic,.heif"
+                accept={FILE_INPUT_ACCEPT}
                 className="hidden"
                 onChange={(e) => {
                   if (e.target.files?.[0]) {
@@ -336,7 +373,7 @@ export function ReceiptUploader() {
             <label>
               <input
                 type="file"
-                accept="image/*,.heic,.heif"
+                accept={FILE_INPUT_ACCEPT}
                 capture="environment"
                 className="hidden"
                 onChange={(e) => {

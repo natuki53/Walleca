@@ -17,6 +17,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -89,6 +90,9 @@ export function ReceiptConfirmDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>レシートを確定</DialogTitle>
+          <DialogDescription className="sr-only">
+            抽出結果を確認して取引として登録します。
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit((data) => confirmMutation.mutate(data))}>
           <div className="space-y-4 py-4">

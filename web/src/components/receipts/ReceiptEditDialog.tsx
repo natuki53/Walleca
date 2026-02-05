@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -93,6 +94,9 @@ export function ReceiptEditDialog({ open, onClose, receipt }: ReceiptEditDialogP
       <DialogContent>
         <DialogHeader>
           <DialogTitle>OCR結果を編集</DialogTitle>
+          <DialogDescription className="sr-only">
+            OCRで抽出したレシート情報を修正します。
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit((data) => updateMutation.mutate(data))}>

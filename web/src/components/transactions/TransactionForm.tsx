@@ -16,6 +16,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -80,6 +81,9 @@ export function TransactionForm({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{transaction ? '取引を編集' : '取引を追加'}</DialogTitle>
+          <DialogDescription className="sr-only">
+            取引情報を入力して保存します。
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(handleFormSubmit)}>
           <div className="space-y-4 py-4">

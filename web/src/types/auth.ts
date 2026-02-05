@@ -21,3 +21,12 @@ export interface LoginInput {
   email: string;
   password: string;
 }
+
+export interface UpdateMeInput {
+  displayName: string;
+}
+
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
