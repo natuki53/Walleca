@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { AppError } from '../utils/errors';
+import multer from 'multer';
+import { AppError, Errors } from '../utils/errors';
 import { logger } from '../utils/logger';
+
+const MAX_FILE_SIZE = Number.parseInt(process.env.MAX_FILE_SIZE || '10485760', 10);
 
 export function errorHandler(
   err: Error,
@@ -8,6 +11,21 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      const appError = Errors.fileTooLarge(MAX_FILE_SIZE);
+      res.status(appError.statusCode).json(appError.toJSON());
+      return;
+    }
+
+    const appError = Errors.validation('アップロードデータが不正です', {
+      code: err.code,
+      field: err.field,
+    });
+    res.status(appError.statusCode).json(appError.toJSON());
+    return;
+  }
+
   // AppErrorの場合
   if (err instanceof AppError) {
     res.status(err.statusCode).json(err.toJSON());

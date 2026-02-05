@@ -8,6 +8,7 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads';
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || '10485760'); // 10MB
 const ALLOWED_MIME_TYPES = [
   'image/jpeg',
+  'image/jpg',
   'image/png',
   'image/webp',
   'image/heic',
@@ -46,11 +47,10 @@ const fileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
   const isAllowedMimeType = ALLOWED_MIME_TYPES.includes(mimeType);
   const isAllowedExtension = ALLOWED_EXTENSIONS.includes(extension);
   const isGenericMimeType = mimeType === '' || mimeType === 'application/octet-stream';
-  const isImageMimeType = mimeType.startsWith('image/');
 
   if (
     isAllowedMimeType ||
-    (isAllowedExtension && (isImageMimeType || isGenericMimeType))
+    (isAllowedExtension && isGenericMimeType)
   ) {
     cb(null, true);
   } else {
