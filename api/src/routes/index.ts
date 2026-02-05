@@ -3,6 +3,7 @@ import authRoutes from './auth.routes';
 import transactionRoutes from './transaction.routes';
 import receiptRoutes from './receipt.routes';
 import subscriptionRoutes from './subscription.routes';
+import subscriptionCategoryRoutes from './subscription-category.routes';
 import viewRoutes from './view.routes';
 import notificationRoutes from './notification.routes';
 import searchRoutes from './search.routes';
@@ -21,6 +22,9 @@ router.use('/receipts', receiptRoutes);
 
 // サブスクリプション
 router.use('/subscriptions', subscriptionRoutes);
+
+// サブスクリプションカテゴリ
+router.use('/subscription-categories', subscriptionCategoryRoutes);
 
 // ビュー
 router.use('/views', viewRoutes);

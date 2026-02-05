@@ -13,11 +13,17 @@ export const createSubscriptionSchema = z.object({
     .positive('金額は正の数で入力してください')
     .max(999999999999, '金額が上限を超えています'),
   billingCycle: billingCycleEnum.default('monthly'),
+  registrationDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, '日付はYYYY-MM-DD形式で入力してください')
+    .optional(),
   nextPaymentDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, '日付はYYYY-MM-DD形式で入力してください'),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, '日付はYYYY-MM-DD形式で入力してください')
+    .optional(),
   category: z
     .string()
+    .trim()
     .max(100, 'カテゴリは100文字以内で入力してください')
     .optional(),
   status: subscriptionStatusEnum.default('active'),
@@ -42,6 +48,7 @@ export const updateSubscriptionSchema = z.object({
     .optional(),
   category: z
     .string()
+    .trim()
     .max(100, 'カテゴリは100文字以内で入力してください')
     .nullable()
     .optional(),
@@ -56,7 +63,7 @@ export const subscriptionQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).optional(),
   status: subscriptionStatusEnum.optional(),
   billingCycle: billingCycleEnum.optional(),
-  category: z.string().optional(),
+  category: z.string().trim().optional(),
 });
 
 export const subscriptionSummaryQuerySchema = z.object({

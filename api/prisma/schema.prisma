@@ -19,6 +19,7 @@ model User {
   receipts      Receipt[]
   transactions  Transaction[]
   subscriptions Subscription[]
+  subscriptionCategories SubscriptionCategory[]
   views         View[]
   notifications Notification[]
   refreshTokens RefreshToken[]
@@ -129,6 +130,21 @@ model Subscription {
   @@index([status])
   @@index([nextPaymentDate])
   @@map("subscriptions")
+}
+
+// サブスクリプションカテゴリ
+model SubscriptionCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String   @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("subscription_categories")
 }
 
 // ビュータイプ
