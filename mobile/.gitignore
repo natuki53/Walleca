@@ -1,0 +1,48 @@
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+
+# Android
+*.iml
+*.class
+*.log
+*.pyc
+*.swp
+.gradle/
+local.properties
+*.apk
+*.aab
+*.dex
+.cxx/
+
+# iOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/*.mode1v3
+**/*.mode2v3
+**/*.moved-aside
+**/*.pbxuser
+**/*.perspectivev3
+**/*sync/
+**/.vagrant/
+**/DerivedData/
+**/Icon?
+**/Pods/
+**/.symlinks/
+*.hmap
+*.ipa
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
