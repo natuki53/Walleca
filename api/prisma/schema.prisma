@@ -7,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ユーザー
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique @db.VarChar(255)
@@ -16,53 +15,34 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  receipts      Receipt[]
-  transactions  Transaction[]
-  subscriptions Subscription[]
+  settings               UserSetting?
+  transactionCategories  TransactionCategory[]
   subscriptionCategories SubscriptionCategory[]
-  views         View[]
-  notifications Notification[]
-  refreshTokens RefreshToken[]
+  receiptOcrJobs         ReceiptOcrJob[]
+  subscriptionOcrJobs    SubscriptionOcrJob[]
+  receipts               Receipt[]
+  transactions           Transaction[]
+  subscriptions          Subscription[]
+  notifications          Notification[]
+  refreshTokens          RefreshToken[]
 
   @@map("users")
 }
 
-// OCRステータス
-enum OcrStatus {
-  pending
-  processing
-  success
-  failed
+model UserSetting {
+  id                                 String   @id @default(uuid()) @db.Uuid
+  userId                             String   @unique @map("user_id") @db.Uuid
+  timezone                           String   @default("Asia/Tokyo") @db.VarChar(100)
+  subscriptionNotificationEnabled    Boolean  @default(true) @map("subscription_notification_enabled")
+  subscriptionNotificationDaysBefore Int      @default(3) @map("subscription_notification_days_before")
+  createdAt                          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                          DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  @@map("ocr_status")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
 }
 
-// レシート
-model Receipt {
-  id                String    @id @default(uuid()) @db.Uuid
-  userId            String    @map("user_id") @db.Uuid
-  imagePath         String    @map("image_path") @db.VarChar(500)
-  imageSize         Int       @map("image_size")
-  mimeType          String    @map("mime_type") @db.VarChar(50)
-  ocrStatus         OcrStatus @default(pending) @map("ocr_status")
-  ocrRawText        String?   @map("ocr_raw_text") @db.Text
-  extractedMerchant String?   @map("extracted_merchant") @db.VarChar(255)
-  extractedDate     DateTime? @map("extracted_date") @db.Date
-  extractedTotal    Decimal?  @map("extracted_total") @db.Decimal(12, 2)
-  ocrProcessedAt    DateTime? @map("ocr_processed_at") @db.Timestamptz
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transaction Transaction?
-
-  @@index([userId])
-  @@index([ocrStatus])
-  @@index([createdAt])
-  @@map("receipts")
-}
-
-// 取引タイプ
 enum TransactionType {
   expense
   income
@@ -71,29 +51,18 @@ enum TransactionType {
   @@map("transaction_type")
 }
 
-// 取引
-model Transaction {
-  id              String          @id @default(uuid()) @db.Uuid
-  userId          String          @map("user_id") @db.Uuid
-  receiptId       String?         @unique @map("receipt_id") @db.Uuid
-  type            TransactionType @default(expense)
-  amount          Decimal         @db.Decimal(12, 2)
-  transactionDate DateTime        @map("transaction_date") @db.Date
-  merchant        String?         @db.VarChar(255)
-  properties      Json            @default("{}")
-  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+enum PaymentMethod {
+  cash
+  credit_card
+  debit_card
+  e_money
+  qr_payment
+  bank_transfer
+  other
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  receipt Receipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([transactionDate])
-  @@index([type])
-  @@map("transactions")
+  @@map("payment_method")
 }
 
-// 請求サイクル
 enum BillingCycle {
   monthly
   yearly
@@ -101,7 +70,6 @@ enum BillingCycle {
   @@map("billing_cycle")
 }
 
-// サブスクリプションステータス
 enum SubscriptionStatus {
   active
   paused
@@ -110,7 +78,156 @@ enum SubscriptionStatus {
   @@map("subscription_status")
 }
 
-// サブスクリプション
+enum OcrJobStatus {
+  pending
+  processing
+  success
+  failed
+  confirmed
+  expired
+
+  @@map("ocr_job_status")
+}
+
+enum ReceiptRecordStatus {
+  confirmed
+  manual
+
+  @@map("receipt_record_status")
+}
+
+enum RecordSourceType {
+  manual
+  ocr
+
+  @@map("record_source_type")
+}
+
+enum NotificationType {
+  subscription_reminder
+  system
+
+  @@map("notification_type")
+}
+
+model TransactionCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String   @db.VarChar(100)
+  sortOrder Int      @default(0) @map("sort_order")
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, name])
+  @@index([userId, sortOrder])
+  @@map("transaction_categories")
+}
+
+model SubscriptionCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String   @db.VarChar(100)
+  sortOrder Int      @default(0) @map("sort_order")
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+
+  @@unique([userId, name])
+  @@index([userId, sortOrder])
+  @@map("subscription_categories")
+}
+
+model ReceiptOcrJob {
+  id               String       @id @default(uuid()) @db.Uuid
+  userId           String       @map("user_id") @db.Uuid
+  status           OcrJobStatus @default(pending)
+  extractedMerchant String?     @map("extracted_merchant") @db.VarChar(255)
+  extractedDate    DateTime?    @map("extracted_date") @db.Date
+  extractedTotal   Decimal?     @map("extracted_total") @db.Decimal(12, 2)
+  rawText          String?      @map("raw_text") @db.Text
+  expiresAt        DateTime     @map("expires_at") @db.Timestamptz
+  processedAt      DateTime?    @map("processed_at") @db.Timestamptz
+  confirmedAt      DateTime?    @map("confirmed_at") @db.Timestamptz
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([expiresAt])
+  @@map("receipt_ocr_jobs")
+}
+
+model SubscriptionOcrJob {
+  id                       String       @id @default(uuid()) @db.Uuid
+  userId                   String       @map("user_id") @db.Uuid
+  status                   OcrJobStatus @default(pending)
+  extractedServiceName     String?      @map("extracted_service_name") @db.VarChar(255)
+  extractedAmount          Decimal?     @map("extracted_amount") @db.Decimal(12, 2)
+  extractedBillingCycle    BillingCycle? @map("extracted_billing_cycle")
+  extractedNextPaymentDate DateTime?    @map("extracted_next_payment_date") @db.Date
+  rawText                  String?      @map("raw_text") @db.Text
+  expiresAt                DateTime     @map("expires_at") @db.Timestamptz
+  processedAt              DateTime?    @map("processed_at") @db.Timestamptz
+  confirmedAt              DateTime?    @map("confirmed_at") @db.Timestamptz
+  createdAt                DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([expiresAt])
+  @@map("subscription_ocr_jobs")
+}
+
+model Receipt {
+  id          String              @id @default(uuid()) @db.Uuid
+  userId      String              @map("user_id") @db.Uuid
+  merchant    String?             @db.VarChar(255)
+  receiptDate DateTime?           @map("receipt_date") @db.Date
+  totalAmount Decimal?            @map("total_amount") @db.Decimal(12, 2)
+  ocrStatus   ReceiptRecordStatus @default(confirmed) @map("ocr_status")
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction Transaction?
+
+  @@index([userId, receiptDate])
+  @@map("receipts")
+}
+
+model Transaction {
+  id              String          @id @default(uuid()) @db.Uuid
+  userId          String          @map("user_id") @db.Uuid
+  receiptId       String?         @unique @map("receipt_id") @db.Uuid
+  type            TransactionType @default(expense)
+  amount          Decimal         @db.Decimal(12, 2)
+  transactionDate DateTime        @map("transaction_date") @db.Date
+  merchant        String?         @db.VarChar(255)
+  categoryId      String?         @map("category_id") @db.Uuid
+  paymentMethod   PaymentMethod?  @map("payment_method")
+  memo            String?         @db.Text
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  receipt  Receipt?             @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  category TransactionCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([userId, transactionDate])
+  @@index([userId, type])
+  @@index([categoryId])
+  @@map("transactions")
+}
+
 model Subscription {
   id              String             @id @default(uuid()) @db.Uuid
   userId          String             @map("user_id") @db.Uuid
@@ -118,92 +235,42 @@ model Subscription {
   amount          Decimal            @db.Decimal(12, 2)
   billingCycle    BillingCycle       @default(monthly) @map("billing_cycle")
   nextPaymentDate DateTime           @map("next_payment_date") @db.Date
-  category        String?            @db.VarChar(100)
+  categoryId      String?            @map("category_id") @db.Uuid
   status          SubscriptionStatus @default(active)
   memo            String?            @db.Text
+  sourceType      RecordSourceType   @default(manual) @map("source_type")
   createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category SubscriptionCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  notifications Notification[]
 
-  @@index([userId])
-  @@index([status])
-  @@index([nextPaymentDate])
+  @@index([userId, nextPaymentDate])
+  @@index([userId, status])
+  @@index([categoryId])
   @@map("subscriptions")
 }
 
-// サブスクリプションカテゴリ
-model SubscriptionCategory {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  name      String   @db.VarChar(100)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, name])
-  @@index([userId])
-  @@map("subscription_categories")
-}
-
-// ビュータイプ
-enum ViewType {
-  list
-  calendar
-
-  @@map("view_type")
-}
-
-// ビュー設定
-model View {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  name       String   @db.VarChar(100)
-  viewType   ViewType @default(list) @map("view_type")
-  filters    Json     @default("{}")
-  sortConfig Json     @default("{\"field\": \"transaction_date\", \"order\": \"desc\"}") @map("sort_config")
-  groupBy    String?  @map("group_by") @db.VarChar(50)
-  isDefault  Boolean  @default(false) @map("is_default")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("views")
-}
-
-// 通知タイプ
-enum NotificationType {
-  subscription_reminder
-  system
-  info
-
-  @@map("notification_type")
-}
-
-// 通知
 model Notification {
-  id          String           @id @default(uuid()) @db.Uuid
-  userId      String           @map("user_id") @db.Uuid
-  type        NotificationType
-  title       String           @db.VarChar(255)
-  message     String?          @db.Text
-  relatedId   String?          @map("related_id") @db.Uuid
-  isRead      Boolean          @default(false) @map("is_read")
-  scheduledAt DateTime?        @map("scheduled_at") @db.Timestamptz
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  id                    String           @id @default(uuid()) @db.Uuid
+  userId                String           @map("user_id") @db.Uuid
+  type                  NotificationType
+  title                 String           @db.VarChar(255)
+  message               String           @db.Text
+  relatedSubscriptionId String?          @map("related_subscription_id") @db.Uuid
+  isRead                Boolean          @default(false) @map("is_read")
+  scheduledAt           DateTime?        @map("scheduled_at") @db.Timestamptz
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relatedSubscription Subscription? @relation(fields: [relatedSubscriptionId], references: [id], onDelete: SetNull)
 
-  @@index([userId])
-  @@index([isRead])
+  @@index([userId, isRead])
   @@index([scheduledAt])
   @@map("notifications")
 }
 
-// リフレッシュトークン
 model RefreshToken {
   id         String   @id @default(uuid()) @db.Uuid
   userId     String   @map("user_id") @db.Uuid

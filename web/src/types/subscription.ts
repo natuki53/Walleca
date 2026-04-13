@@ -1,13 +1,18 @@
 export type BillingCycle = 'monthly' | 'yearly';
 export type SubscriptionStatus = 'active' | 'paused' | 'cancelled';
 
+export interface SubscriptionCategory {
+  id: string;
+  name: string;
+}
+
 export interface Subscription {
   id: string;
   serviceName: string;
   amount: number;
   billingCycle: BillingCycle;
   nextPaymentDate: string;
-  category: string | null;
+  category: SubscriptionCategory | null;
   status: SubscriptionStatus;
   memo: string | null;
   createdAt: string;

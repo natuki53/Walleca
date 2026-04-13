@@ -6,6 +6,7 @@ import {
   UpdateTransactionInput,
   TransactionFilters,
   TransactionSummary,
+  TransactionSummaryGroupBy,
 } from '@/types/transaction';
 
 export const transactionsApi = {
@@ -34,7 +35,9 @@ export const transactionsApi = {
     return response.data;
   },
 
-  getSummary: async (params?: { from?: string; to?: string; groupBy?: string }): Promise<ApiResponse<TransactionSummary>> => {
+  getSummary: async (
+    params?: { from?: string; to?: string; groupBy?: TransactionSummaryGroupBy },
+  ): Promise<ApiResponse<TransactionSummary>> => {
     const response = await apiClient.get('/transactions/summary', { params });
     return response.data;
   },

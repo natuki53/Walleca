@@ -1,17 +1,19 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, Plus, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, SlidersHorizontal, Upload } from 'lucide-react';
 import { subscriptionsApi } from '@/api/subscriptions';
 import { subscriptionCategoriesApi } from '@/api/subscriptionCategories';
 import { SubscriptionForm, SubscriptionFormData } from '@/components/subscriptions/SubscriptionForm';
 import { SubscriptionList } from '@/components/subscriptions/SubscriptionList';
+import { SubscriptionUploader } from '@/components/subscriptions/SubscriptionUploader';
 import { toast } from '@/hooks/useToast';
 import { BillingCycle, CreateSubscriptionInput, SubscriptionStatus } from '@/types/subscription';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -28,7 +30,7 @@ function toCreateInput(data: SubscriptionFormData): CreateSubscriptionInput {
     serviceName: data.serviceName.trim(),
     amount: data.amount,
     billingCycle: data.billingCycle,
-    ...(data.registrationDate && { registrationDate: data.registrationDate }),
+    nextPaymentDate: data.nextPaymentDate,
     status: data.status,
     ...(category && { category }),
     ...(memo && { memo }),
@@ -41,7 +43,10 @@ function toMonthlyAmount(amount: number, cycle: BillingCycle): number {
 
 export default function SubscriptionsPage() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const ocrSectionRef = useRef<HTMLDivElement | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [dismissedAutoAction, setDismissedAutoAction] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | SubscriptionStatus>('all');
   const [billingCycleFilter, setBillingCycleFilter] = useState<'all' | BillingCycle>('all');
@@ -92,7 +97,7 @@ export default function SubscriptionsPage() {
   );
   const availableCategoryOptions = useMemo(() => {
     const fromSubscriptions = subscriptions
-      .map((subscription) => subscription.category?.trim() || '')
+      .map((subscription) => subscription.category?.name?.trim() || '')
       .filter((category): category is string => category.length > 0);
     return Array.from(new Set([...categoryOptions, ...fromSubscriptions])).sort((a, b) =>
       a.localeCompare(b, 'ja')
@@ -124,14 +129,89 @@ export default function SubscriptionsPage() {
     setIsFilterOpen(false);
   };
 
+  const action = searchParams?.get('action') ?? '';
+  const autoOpenForm = action === 'new' && dismissedAutoAction !== action;
+
+  useEffect(() => {
+    if (action === 'ocr') {
+      ocrSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [action]);
+
+  const handleCloseForm = () => {
+    setIsFormOpen(false);
+    if (action === 'new') {
+      setDismissedAutoAction(action);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">サブスク</h1>
-        <Button onClick={() => setIsFormOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          サブスクを追加
-        </Button>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">サブスク</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            手入力とOCRを同じフローにまとめて、サブスク登録までここで完結できます。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => {
+              setDismissedAutoAction(null);
+              setIsFormOpen(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            手動で追加
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => ocrSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            OCRを読み取る
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_1.35fr]">
+        <Card className="border-dashed">
+          <CardHeader>
+            <CardTitle>手動入力</CardTitle>
+            <CardDescription>
+              契約中サービスを直接登録したい場合はこちらから入力します。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+              サービス名、金額、支払周期、次回支払日を手動で登録できます。
+            </div>
+            <Button
+              className="w-full"
+              onClick={() => {
+                setDismissedAutoAction(null);
+                setIsFormOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              サブスクフォームを開く
+            </Button>
+          </CardContent>
+        </Card>
+
+        <div ref={ocrSectionRef} id="subscription-ocr-upload">
+          <Card>
+            <CardHeader>
+              <CardTitle>サブスクOCR</CardTitle>
+              <CardDescription>
+                アップロード後はそのまま確認画面へ進み、修正してサブスク登録できます。
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SubscriptionUploader />
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -318,8 +398,8 @@ export default function SubscriptionsPage() {
       )}
 
       <SubscriptionForm
-        open={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
+        open={isFormOpen || autoOpenForm}
+        onClose={handleCloseForm}
         categoryOptions={availableCategoryOptions}
         onSubmit={async (formData) => {
           await createMutation.mutateAsync(toCreateInput(formData));

@@ -47,6 +47,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             variant="ghost"
             size="icon"
             className="md:hidden"
+            type="button"
             onClick={onMenuClick}
           >
             <Menu className="h-5 w-5" />
@@ -55,7 +56,13 @@ export function Header({ onMenuClick }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            className="relative"
+            onClick={() => router.push('/notifications')}
+          >
             <Bell className="h-5 w-5" />
             <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
           </Button>

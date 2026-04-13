@@ -5,10 +5,24 @@ export interface ExtractedReceiptFields {
   total: number | null;
 }
 
+// 全角ドル・全角円記号も含めて通貨プレフィックス/サフィックスを認識する
+const CURRENCY_AMOUNT_PREFIX = '(?:USD|JPY|US\\$|[$¥￥＄]|US\\s*\\$)?\\s*';
+const CURRENCY_AMOUNT_SUFFIX = '(?:\\s*(?:USD|JPY|US\\$|[$¥￥＄]|円))?';
+
 const DATE_PATTERNS = [
   /(20\d{2}|19\d{2})[./-年](\d{1,2})[./-月](\d{1,2})日?/g,
   /(\d{2})[./-](\d{1,2})[./-](\d{1,2})/g,
 ];
+const ENGLISH_MONTH_PATTERN =
+  '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+const ENGLISH_DATE_MONTH_FIRST_PATTERN = new RegExp(
+  `${ENGLISH_MONTH_PATTERN}\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,)?\\s+(20\\d{2}|19\\d{2}|\\d{2})`,
+  'gi'
+);
+const ENGLISH_DATE_DAY_FIRST_PATTERN = new RegExp(
+  `(\\d{1,2})(?:st|nd|rd|th)?\\s+${ENGLISH_MONTH_PATTERN}(?:,)?\\s+(20\\d{2}|19\\d{2}|\\d{2})`,
+  'gi'
+);
 
 const DATE_YEAR_LAST_PATTERN = /(\d{1,2})[./-](\d{1,2})[./-]((?:20\d{2}|19\d{2}|\d{2}))/g;
 const DATE_COMPACT_PATTERN = /((?:20\d{2}|19\d{2}))(\d{2})(\d{2})/g;
@@ -27,6 +41,11 @@ const DATE_POSITIVE_KEYWORDS = [
   '売上日時',
   '日時',
   '日付',
+  'transaction date',
+  'purchase date',
+  'order date',
+  'issued on',
+  'date',
 ];
 
 const DATE_NEGATIVE_KEYWORDS = [
@@ -39,9 +58,17 @@ const DATE_NEGATIVE_KEYWORDS = [
   '支払期限',
   '振込期限',
   '納期',
+  'expiry',
+  'expiration',
+  'expires',
+  'due date',
+  'best before',
 ];
 
-const POSITIVE_AMOUNT_PATTERN = /([¥￥]?\s*\d{1,3}(?:[,，]\d{3})+|[¥￥]?\s*\d+)(?:\.(\d{1,2}))?/g;
+const POSITIVE_AMOUNT_PATTERN = new RegExp(
+  `(${CURRENCY_AMOUNT_PREFIX}\\s*\\d{1,3}(?:[,，]\\d{3})+|${CURRENCY_AMOUNT_PREFIX}\\s*\\d+)(?:\\.(\\d{1,2}))?${CURRENCY_AMOUNT_SUFFIX}`,
+  'gi'
+);
 
 const PRIMARY_TOTAL_KEYWORDS = [
   '合計',
@@ -50,15 +77,27 @@ const PRIMARY_TOTAL_KEYWORDS = [
   '領収金額',
   '請求額',
   '総合計',
+  '税込合計',
+  '税込金額',
+  'お支払い金額',
+  'お支払金額',
+  '支払金額',
+  '請求金額',
+  'ご請求額',
+  'ご請求金額',
   'TOTAL',
+  'GRAND TOTAL',
+  'AMOUNT DUE',
   'AMOUNT',
+  'SUBTOTAL',
+  'CHARGE',
 ];
 
 const EXCLUDED_AMOUNT_KEYWORDS = [
   '小計',
   '内税',
   '外税',
-  '税',
+  '消費税',
   '値引',
   '割引',
   'お釣',
@@ -66,6 +105,12 @@ const EXCLUDED_AMOUNT_KEYWORDS = [
   '預り',
   'TEL',
   '電話',
+  'ポイント',
+  '付与',
+  'discount',
+  'tax',
+  'change',
+  'cash',
 ];
 
 const MERCHANT_LINE_BLOCK_PATTERNS = [
@@ -74,29 +119,118 @@ const MERCHANT_LINE_BLOCK_PATTERNS = [
   /^(?:tel|電話|phone|fax)/i,
   /(?:レシート|領収書|receipt|ありがとう|thank you)/i,
   /(20\d{2}|19\d{2}|\d{2})[./-年](\d{1,2})[./-月](\d{1,2})日?/,
+  ENGLISH_DATE_MONTH_FIRST_PATTERN,
+  ENGLISH_DATE_DAY_FIRST_PATTERN,
   /\d{1,2}:\d{2}/,
   /(?:合計|小計|税込|税|total|amount)/i,
   /(?:取引|伝票|会計|レジ|担当)/,
   /[0-9]{2,4}-[0-9]{2,4}-[0-9]{3,4}/,
 ];
 
+const MERCHANT_NEGATIVE_KEYWORDS = [
+  '合計',
+  '小計',
+  '税込',
+  '税',
+  '金額',
+  '料金',
+  '請求',
+  '支払',
+  '支払い',
+  '取引',
+  '明細',
+  '利用明細',
+  '注文番号',
+  '注文',
+  '会員番号',
+  'お問い合わせ',
+  'カスタマー',
+  'サポート',
+  'ヘルプ',
+  '登録日',
+  '開始日',
+  '更新日',
+  '次回',
+  'プラン',
+  '無料',
+  'トライアル',
+  '月額',
+  '年額',
+  'billing',
+  'payment',
+  'price',
+  'amount',
+  'invoice',
+  'order',
+  'customer',
+  'support',
+  'help',
+  'account',
+  'member',
+  'trial',
+  'plan',
+  'renew',
+  'date',
+];
+
+const MERCHANT_POSITIVE_KEYWORDS = [
+  '株式会社',
+  '有限会社',
+  '合同会社',
+  '（株）',
+  '(株)',
+  '店',
+  'ストア',
+  'ショップ',
+  '商店',
+  'スーパー',
+  'マート',
+  'market',
+  'mart',
+  'store',
+  'shop',
+  'cafe',
+  'coffee',
+  'restaurant',
+  'bakery',
+  'pharmacy',
+  'inc',
+  'corp',
+  'llc',
+  'company',
+  'co.',
+  'ltd',
+];
+
+/**
+ * 全角の数字・アルファベット・記号をASCIIに変換する。
+ * 日本語カナ（ー など）はここでは変換しない（店名などを壊さないため）。
+ */
+function normalizeFullWidth(text: string): string {
+  return text
+    .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[Ａ-Ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[ａ-ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[／]/g, '/')
+    .replace(/[．]/g, '.')
+    .replace(/[－―]/g, '-')
+    .replace(/[：]/g, ':')
+    .replace(/[￥]/g, '¥')
+    .replace(/[，]/g, ',');
+}
+
 function normalizeLine(line: string): string {
-  return line
+  return normalizeFullWidth(line)
     .replace(/[\t\u3000]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
 
+/**
+ * 日付テキスト専用の正規化。長音符もハイフンに変換する（日付区切りとして使われることがある）。
+ */
 function normalizeDateText(text: string): string {
-  const replacedFullWidth = text.replace(/[０-９]/g, (char) =>
-    String.fromCharCode(char.charCodeAt(0) - 0xFEE0)
-  );
-
-  return replacedFullWidth
-    .replace(/[／]/g, '/')
-    .replace(/[．]/g, '.')
-    .replace(/[－―ー]/g, '-')
-    .replace(/[：]/g, ':');
+  return normalizeFullWidth(text).replace(/[ーｰ]/g, '-');
 }
 
 function isValidDate(year: number, month: number, day: number): boolean {
@@ -136,6 +270,32 @@ function parseDateParts(
   }
 
   return new Date(normalizedYear, month - 1, day);
+}
+
+function parseEnglishMonthName(monthName: string): number | null {
+  const normalized = monthName.toLowerCase();
+  const monthEntries: Array<[string, number]> = [
+    ['jan', 1],
+    ['feb', 2],
+    ['mar', 3],
+    ['apr', 4],
+    ['may', 5],
+    ['jun', 6],
+    ['jul', 7],
+    ['aug', 8],
+    ['sep', 9],
+    ['oct', 10],
+    ['nov', 11],
+    ['dec', 12],
+  ];
+
+  for (const [prefix, month] of monthEntries) {
+    if (normalized.startsWith(prefix)) {
+      return month;
+    }
+  }
+
+  return null;
 }
 
 interface DateCandidate {
@@ -248,6 +408,20 @@ function findDateCandidates(lines: string[]): DateCandidate[] {
       const day = Number.parseInt(match[3], 10);
       pushCandidate(lineIndex, parseDateParts(year, month, day));
     }
+
+    for (const match of line.matchAll(ENGLISH_DATE_MONTH_FIRST_PATTERN)) {
+      const month = parseEnglishMonthName(match[1]);
+      const day = Number.parseInt(match[2], 10);
+      const year = Number.parseInt(match[3], 10);
+      pushCandidate(lineIndex, month ? parseDateParts(year, month, day) : null);
+    }
+
+    for (const match of line.matchAll(ENGLISH_DATE_DAY_FIRST_PATTERN)) {
+      const day = Number.parseInt(match[1], 10);
+      const month = parseEnglishMonthName(match[2]);
+      const year = Number.parseInt(match[3], 10);
+      pushCandidate(lineIndex, month ? parseDateParts(year, month, day) : null);
+    }
   });
 
   return candidates;
@@ -255,7 +429,7 @@ function findDateCandidates(lines: string[]): DateCandidate[] {
 
 function parseAmount(value: string, decimal?: string): number | null {
   const normalized = value
-    .replace(/[¥￥,，\s]/g, '')
+    .replace(/(?:USD|JPY|US\$|[$¥￥]|円|,|，|\s)/gi, '')
     .trim();
 
   if (!/^\d+$/.test(normalized)) {
@@ -293,6 +467,90 @@ function extractAmountsFromLine(line: string): number[] {
   }
 
   return amounts;
+}
+
+function scoreMerchantCandidate(line: string, lineIndex: number, totalLines: number): number {
+  const compact = line.replace(/\s/g, '');
+  const lower = line.toLowerCase();
+  const letterCount = Array.from(compact).filter((char) =>
+    /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}A-Za-z]/u.test(char)
+  ).length;
+  const digitCount = (compact.match(/\d/g) || []).length;
+  const nonSpaceLength = compact.length;
+  const letterRatio = nonSpaceLength > 0 ? letterCount / nonSpaceLength : 0;
+  const hasAddressMarker = /(?:都|道|府|県|市|区|町|村|丁目|番地)/.test(line);
+
+  let score = 0;
+
+  if (lineIndex === 0) {
+    score += 8;
+  } else if (lineIndex <= 2) {
+    score += 6;
+  } else if (lineIndex <= 5) {
+    score += 3;
+  } else if (lineIndex <= Math.min(10, totalLines - 1)) {
+    score += 1;
+  } else {
+    score -= 2;
+  }
+
+  if (nonSpaceLength >= 4 && nonSpaceLength <= 24) {
+    score += 5;
+  } else if (nonSpaceLength <= 36) {
+    score += 2;
+  } else {
+    score -= 3;
+  }
+
+  if (digitCount === 0) {
+    score += 4;
+  } else if (digitCount <= 2) {
+    score -= 1;
+  } else {
+    score -= 7;
+  }
+
+  if (letterRatio >= 0.8) {
+    score += 4;
+  } else if (letterRatio >= 0.6) {
+    score += 2;
+  } else {
+    score -= 4;
+  }
+
+  if (MERCHANT_POSITIVE_KEYWORDS.some((keyword) => lower.includes(keyword.toLowerCase()))) {
+    score += 3;
+  }
+
+  if (MERCHANT_NEGATIVE_KEYWORDS.some((keyword) => lower.includes(keyword.toLowerCase()))) {
+    score -= 8;
+  }
+
+  if (hasAddressMarker) {
+    score -= digitCount > 0 ? 8 : 4;
+  }
+
+  if (/[¥￥$]/.test(line)) {
+    score -= 8;
+  }
+
+  if (/\b(?:https?:\/\/|www\.|co\.jp|\.com)\b/i.test(line)) {
+    score -= 8;
+  }
+
+  if (/\d{1,2}:\d{2}/.test(line)) {
+    score -= 8;
+  }
+
+  if (/(20\d{2}|19\d{2}|\d{2})[./-年](\d{1,2})[./-月](\d{1,2})日?/.test(line)) {
+    score -= 8;
+  }
+
+  if (/[@#*_=~|\\]/.test(line)) {
+    score -= 2;
+  }
+
+  return score;
 }
 
 export function extractDate(rawText: string): Date | null {
@@ -333,16 +591,20 @@ export function extractDate(rawText: string): Date | null {
   return candidates[0].date;
 }
 
+interface TotalCandidate {
+  amount: number;
+  score: number;
+}
+
 export function extractTotal(rawText: string): number | null {
   const lines = rawText
     .split(/\r?\n/)
     .map(normalizeLine)
     .filter(Boolean);
 
-  const prioritized: number[] = [];
-  const fallback: number[] = [];
+  const candidates: TotalCandidate[] = [];
 
-  for (const line of lines) {
+  lines.forEach((line, lineIndex) => {
     const upper = line.toUpperCase();
     const hasPrimaryKeyword = PRIMARY_TOTAL_KEYWORDS.some((keyword) =>
       upper.includes(keyword.toUpperCase())
@@ -351,31 +613,67 @@ export function extractTotal(rawText: string): number | null {
       upper.includes(keyword.toUpperCase())
     );
 
+    if (hasExcludedKeyword && !hasPrimaryKeyword) {
+      return;
+    }
+
     const amounts = extractAmountsFromLine(line);
     if (amounts.length === 0) {
-      continue;
+      return;
     }
 
-    if (hasPrimaryKeyword && !hasExcludedKeyword) {
-      prioritized.push(...amounts);
-      continue;
-    }
-
-    const hasCurrencySymbol = /[¥￥]/.test(line);
+    const hasCurrencySymbol = /(?:USD|JPY|US\$|[$¥￥])/i.test(line);
     const hasGroupedDigits = /\d{1,3}(?:[,，]\d{3})+/.test(line);
 
-    if (hasCurrencySymbol || hasGroupedDigits) {
-      fallback.push(...amounts);
-    }
-  }
+    for (const amount of amounts) {
+      let score = 0;
 
-  const candidates = prioritized.length > 0 ? prioritized : fallback;
+      if (hasPrimaryKeyword && !hasExcludedKeyword) {
+        score += 20;
+      } else if (hasPrimaryKeyword) {
+        score += 8;
+      }
+
+      if (hasCurrencySymbol) {
+        score += 4;
+      }
+
+      if (hasGroupedDigits) {
+        score += 3;
+      }
+
+      // 後半の行ほど合計に近い傾向（レシートは末尾に合計）
+      const relativePos = lineIndex / Math.max(lines.length - 1, 1);
+      if (relativePos >= 0.6) {
+        score += 3;
+      } else if (relativePos >= 0.4) {
+        score += 1;
+      }
+
+      // 適切な金額範囲 (100円〜100万円)
+      if (amount >= 100 && amount <= 1_000_000) {
+        score += 2;
+      } else if (amount < 100) {
+        score -= 3;
+      }
+
+      candidates.push({ amount, score });
+    }
+  });
 
   if (candidates.length === 0) {
     return null;
   }
 
-  return Math.max(...candidates);
+  // スコア最高のものを選ぶ。同スコアなら大きい値を優先（合計は通常最大）
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    return b.amount - a.amount;
+  });
+
+  return candidates[0].amount;
 }
 
 export function extractMerchant(rawText: string): string | null {
@@ -384,7 +682,12 @@ export function extractMerchant(rawText: string): string | null {
     .map(normalizeLine)
     .filter(Boolean);
 
-  const candidates = lines.filter((line) => {
+  const candidates = lines
+    .map((line, lineIndex) => ({
+      line,
+      lineIndex,
+    }))
+    .filter(({ line }) => {
     if (line.length < 2 || line.length > 48) {
       return false;
     }
@@ -393,21 +696,27 @@ export function extractMerchant(rawText: string): string | null {
       return false;
     }
 
-    return !MERCHANT_LINE_BLOCK_PATTERNS.some((pattern) => pattern.test(line));
-  });
+      return !MERCHANT_LINE_BLOCK_PATTERNS.some((pattern) => pattern.test(line));
+    })
+    .map(({ line, lineIndex }) => ({
+      line,
+      score: scoreMerchantCandidate(line, lineIndex, lines.length),
+    }))
+    .sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+
+      return a.line.length - b.line.length;
+    });
 
   if (candidates.length === 0) {
     return null;
   }
 
-  const topCandidates = candidates.slice(0, 8);
-  const preferred = topCandidates.find((line) => {
-    const hasAddressMarker = /(?:都|道|府|県|市|区|町|丁目)/.test(line);
-    const hasDigit = /\d/.test(line);
-    return !hasAddressMarker && !hasDigit;
-  });
-
-  return preferred ?? topCandidates[0];
+  const winner = candidates[0];
+  // スコア閾値を3に下げて、短いが正しい店名も拾えるようにする
+  return winner && winner.score >= 3 ? winner.line : null;
 }
 
 export function extractReceiptFields(rawText: string): ExtractedReceiptFields {

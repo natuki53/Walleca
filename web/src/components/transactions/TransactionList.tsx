@@ -28,9 +28,11 @@ import { Transaction, TransactionType, UpdateTransactionInput } from '@/types/tr
 import { transactionsApi } from '@/api/transactions';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
+import { TransactionCategory } from '@/types/transactionCategory';
 
 interface TransactionListProps {
   transactions: Transaction[];
+  categoryOptions?: TransactionCategory[];
 }
 
 const typeLabels: Record<TransactionType, string> = {
@@ -45,7 +47,7 @@ const typeColors: Record<TransactionType, string> = {
   adjustment: 'text-blue-600',
 };
 
-export function TransactionList({ transactions }: TransactionListProps) {
+export function TransactionList({ transactions, categoryOptions = [] }: TransactionListProps) {
   const queryClient = useQueryClient();
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
@@ -109,6 +111,11 @@ export function TransactionList({ transactions }: TransactionListProps) {
                       {typeLabels[transaction.type]}
                     </span>
                   </p>
+                  {transaction.category?.name && (
+                    <p className="text-xs text-muted-foreground">
+                      カテゴリ: {transaction.category.name}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -154,10 +161,14 @@ export function TransactionList({ transactions }: TransactionListProps) {
           onSubmit={async (data) => {
             await updateMutation.mutateAsync({
               id: editingTransaction.id,
-              data,
+              data: {
+                ...data,
+                categoryId: data.categoryId?.trim() ? data.categoryId : null,
+              },
             });
           }}
           transaction={editingTransaction}
+          categoryOptions={categoryOptions}
           isLoading={updateMutation.isPending}
         />
       )}

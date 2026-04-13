@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,12 +23,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Transaction, TransactionType } from '@/types/transaction';
+import { TransactionCategory } from '@/types/transactionCategory';
 
 const transactionSchema = z.object({
   type: z.enum(['expense', 'income', 'adjustment']),
   amount: z.coerce.number().positive('金額は正の数で入力してください'),
   transactionDate: z.string().min(1, '日付を入力してください'),
   merchant: z.string().optional(),
+  categoryId: z.string().optional(),
 });
 
 type TransactionFormData = z.infer<typeof transactionSchema>;
@@ -37,6 +40,7 @@ interface TransactionFormProps {
   onClose: () => void;
   onSubmit: (data: TransactionFormData) => Promise<void>;
   transaction?: Transaction;
+  categoryOptions?: TransactionCategory[];
   isLoading?: boolean;
 }
 
@@ -45,6 +49,7 @@ export function TransactionForm({
   onClose,
   onSubmit,
   transaction,
+  categoryOptions = [],
   isLoading,
 }: TransactionFormProps) {
   const {
@@ -61,8 +66,19 @@ export function TransactionForm({
       amount: transaction?.amount || undefined,
       transactionDate: transaction?.transactionDate?.slice(0, 10) || new Date().toISOString().slice(0, 10),
       merchant: transaction?.merchant || '',
+      categoryId: transaction?.categoryId || '',
     },
   });
+
+  useEffect(() => {
+    reset({
+      type: transaction?.type || 'expense',
+      amount: transaction?.amount || undefined,
+      transactionDate: transaction?.transactionDate?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+      merchant: transaction?.merchant || '',
+      categoryId: transaction?.categoryId || '',
+    });
+  }, [open, transaction, reset]);
 
   const handleFormSubmit = async (data: TransactionFormData) => {
     await onSubmit(data);
@@ -139,6 +155,27 @@ export function TransactionForm({
                 placeholder="コンビニ"
                 {...register('merchant')}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="categoryId">カテゴリ（任意）</Label>
+              <input type="hidden" {...register('categoryId')} />
+              <Select
+                value={watch('categoryId') || '__none__'}
+                onValueChange={(value) => setValue('categoryId', value === '__none__' ? '' : value)}
+              >
+                <SelectTrigger id="categoryId">
+                  <SelectValue placeholder="カテゴリを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">未選択</SelectItem>
+                  {categoryOptions.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

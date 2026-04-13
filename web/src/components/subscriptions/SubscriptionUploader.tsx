@@ -1,0 +1,451 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Upload, X } from 'lucide-react';
+import { isAxiosError } from 'axios';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { subscriptionOcrJobsApi } from '@/api/ocrJobs';
+import { uploadClientConfig } from '@/config/upload';
+import { toast } from '@/hooks/useToast';
+import { cn } from '@/lib/utils';
+
+const ALLOWED_IMAGE_EXTENSIONS = uploadClientConfig.allowedExtensions;
+const ALLOWED_IMAGE_MIME_TYPES = uploadClientConfig.allowedMimeTypes;
+const HEIC_EXTENSIONS = uploadClientConfig.heicExtensions;
+const HEIC_MIME_TYPES = uploadClientConfig.heicMimeTypes;
+const FILE_INPUT_ACCEPT = uploadClientConfig.fileInputAccept;
+const ALLOWED_FORMATS_LABEL = ALLOWED_IMAGE_EXTENSIONS
+  .map((extension) => extension.replace('.', '').toUpperCase())
+  .join(' / ');
+
+function formatMegabytes(sizeInBytes: number) {
+  const sizeInMegabytes = sizeInBytes / 1024 / 1024;
+  return Number.isInteger(sizeInMegabytes)
+    ? `${sizeInMegabytes}MB`
+    : `${sizeInMegabytes.toFixed(1)}MB`;
+}
+
+function hasAllowedImageExtension(fileName: string) {
+  const lower = fileName.toLowerCase();
+  return ALLOWED_IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+function hasHeicExtension(fileName: string) {
+  const lower = fileName.toLowerCase();
+  return HEIC_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+function hasAllowedImageMimeType(mimeType: string) {
+  return ALLOWED_IMAGE_MIME_TYPES.includes(mimeType);
+}
+
+function isSupportedImageFile(file: File) {
+  const mimeType = (file.type || '').toLowerCase();
+
+  if (hasAllowedImageMimeType(mimeType)) {
+    return true;
+  }
+
+  const isGenericMimeType = mimeType === '' || mimeType === 'application/octet-stream';
+  return isGenericMimeType && hasAllowedImageExtension(file.name);
+}
+
+function isHeicLikeFile(file: File) {
+  const mimeType = (file.type || '').toLowerCase();
+  return HEIC_MIME_TYPES.includes(mimeType) || hasHeicExtension(file.name);
+}
+
+function replaceExtensionWithJpeg(fileName: string) {
+  const normalizedName = fileName.trim();
+  if (!normalizedName) {
+    return 'subscription.jpg';
+  }
+
+  const dotIndex = normalizedName.lastIndexOf('.');
+  if (dotIndex <= 0) {
+    return `${normalizedName}.jpg`;
+  }
+
+  return `${normalizedName.slice(0, dotIndex)}.jpg`;
+}
+
+type Heic2AnyConvert = (options: {
+  blob: Blob;
+  toType?: string;
+  quality?: number;
+  gifInterval?: number;
+  multiple?: boolean;
+}) => Promise<Blob | Blob[]>;
+
+type HeicToConvert = (options: {
+  blob: Blob;
+  type: 'image/jpeg';
+  quality?: number;
+}) => Promise<Blob | ArrayBuffer | Uint8Array>;
+
+function normalizeToBlob(value: unknown): Blob | null {
+  if (value instanceof Blob) {
+    return value;
+  }
+
+  if (value instanceof ArrayBuffer) {
+    return new Blob([value], { type: 'image/jpeg' });
+  }
+
+  if (value instanceof Uint8Array) {
+    return new Blob([new Uint8Array(value)], { type: 'image/jpeg' });
+  }
+
+  return null;
+}
+
+function describeConversionError(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  try {
+    const serialized = JSON.stringify(error);
+    return serialized && serialized !== '{}' ? serialized : '不明なエラー';
+  } catch {
+    return '不明なエラー';
+  }
+}
+
+function describeUploadError(error: unknown): string {
+  if (!isAxiosError(error)) {
+    return 'アップロードに失敗しました';
+  }
+
+  const message = (error.response?.data as { error?: { message?: unknown } } | undefined)?.error?.message;
+  return typeof message === 'string' && message.trim()
+    ? message
+    : 'アップロードに失敗しました';
+}
+
+async function convertHeicToJpegWithHeicTo(candidates: Blob[]): Promise<Blob> {
+  const heicToModule = await import('heic-to');
+  const converter = ((heicToModule as unknown as { default?: HeicToConvert; heicTo?: HeicToConvert }).heicTo
+    ?? (heicToModule as unknown as { default?: HeicToConvert; heicTo?: HeicToConvert }).default);
+
+  if (typeof converter !== 'function') {
+    throw new Error('heic-to converter not found');
+  }
+
+  let lastError: unknown;
+  for (const blob of candidates) {
+    try {
+      const converted = await converter({
+        blob,
+        type: 'image/jpeg',
+        quality: 0.92,
+      });
+
+      const normalizedBlob = normalizeToBlob(converted);
+      if (normalizedBlob) {
+        return normalizedBlob;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError ?? new Error('heic-to conversion failed');
+}
+
+async function convertHeicToJpeg(file: File): Promise<Blob> {
+  const heic2anyModule = await import('heic2any');
+  const heic2any = heic2anyModule.default as Heic2AnyConvert;
+  const buffer = await file.arrayBuffer();
+
+  const candidates: Blob[] = [
+    file,
+    new Blob([buffer], { type: 'image/heic' }),
+    new Blob([buffer], { type: 'image/heif' }),
+    new Blob([buffer], { type: '' }),
+  ];
+
+  let lastError: unknown;
+
+  for (const blob of candidates) {
+    try {
+      const converted = await heic2any({
+        blob,
+        toType: 'image/jpeg',
+        quality: 0.92,
+        multiple: false,
+      });
+      const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+
+      if (convertedBlob instanceof Blob) {
+        return convertedBlob;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  try {
+    return await convertHeicToJpegWithHeicTo(candidates);
+  } catch (error) {
+    throw error ?? lastError ?? new Error('HEIC conversion failed');
+  }
+}
+
+export function SubscriptionUploader() {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const [dragActive, setDragActive] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isPreviewUnavailable, setIsPreviewUnavailable] = useState(false);
+  const previewUrlRef = useRef<string | null>(null);
+
+  const revokePreviewUrl = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }, []);
+
+  const resetUploader = useCallback(() => {
+    setSelectedFile(null);
+    setPreview(null);
+    setIsPreviewLoading(false);
+    setIsPreviewUnavailable(false);
+    revokePreviewUrl();
+  }, [revokePreviewUrl]);
+
+  const setPreviewFromBlob = useCallback(
+    (blob: Blob) => {
+      revokePreviewUrl();
+      const previewUrl = URL.createObjectURL(blob);
+      previewUrlRef.current = previewUrl;
+      setIsPreviewUnavailable(false);
+      setPreview(previewUrl);
+    },
+    [revokePreviewUrl]
+  );
+
+  useEffect(() => {
+    return () => {
+      revokePreviewUrl();
+    };
+  }, [revokePreviewUrl]);
+
+  const uploadMutation = useMutation({
+    mutationFn: subscriptionOcrJobsApi.create,
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+      toast({ title: 'アップロードしました。読み取り中...' });
+      resetUploader();
+      router.push(`/subscriptions/ocr/${res.data.jobId}`);
+    },
+    onError: (error) => {
+      toast({ title: describeUploadError(error), variant: 'destructive' });
+    },
+  });
+
+  const handleFile = useCallback(
+    async (file: File) => {
+      if (file.size > uploadClientConfig.maxFileSizeBytes) {
+        toast({
+          title: `ファイルサイズは ${formatMegabytes(uploadClientConfig.maxFileSizeBytes)} 以下にしてください`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!isSupportedImageFile(file)) {
+        toast({
+          title: `対応形式は ${ALLOWED_FORMATS_LABEL} です`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (isHeicLikeFile(file)) {
+        setSelectedFile(file);
+        setPreview(null);
+        setIsPreviewUnavailable(false);
+        setIsPreviewLoading(true);
+
+        try {
+          const convertedBlob = await convertHeicToJpeg(file);
+          const convertedFile = new File(
+            [convertedBlob],
+            replaceExtensionWithJpeg(file.name),
+            { type: 'image/jpeg', lastModified: file.lastModified }
+          );
+
+          setSelectedFile(convertedFile);
+          setPreviewFromBlob(convertedBlob);
+          toast({
+            title: 'HEIC/HEIF を JPEG に変換しました',
+            description: '変換後の画像でアップロードします',
+          });
+        } catch (error: unknown) {
+          resetUploader();
+          toast({
+            title: 'HEIC/HEIF の変換に失敗しました',
+            description: `クライアント変換に失敗: ${describeConversionError(error)}`,
+            variant: 'destructive',
+          });
+        } finally {
+          setIsPreviewLoading(false);
+        }
+        return;
+      }
+
+      setSelectedFile(file);
+      setPreviewFromBlob(file);
+      setIsPreviewLoading(false);
+      setIsPreviewUnavailable(false);
+    },
+    [resetUploader, setPreviewFromBlob]
+  );
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragActive(false);
+
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        void handleFile(e.dataTransfer.files[0]);
+      }
+    },
+    [handleFile]
+  );
+
+  const handleUpload = () => {
+    if (selectedFile && !isPreviewLoading) {
+      uploadMutation.mutate(selectedFile);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-6">
+        {!selectedFile ? (
+          <div
+            className={cn(
+              'rounded-lg border-2 border-dashed p-8 text-center transition-colors',
+              dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'
+            )}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+          >
+            <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
+            <p className="mt-4 text-sm text-muted-foreground">
+              サブスク画面のスクリーンショットをドラッグ＆ドロップ
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">または</p>
+            <label>
+              <input
+                type="file"
+                accept={FILE_INPUT_ACCEPT}
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    void handleFile(e.target.files[0]);
+                  }
+                }}
+              />
+              <Button variant="outline" className="mt-4" asChild>
+                <span>ファイルを選択</span>
+              </Button>
+            </label>
+            <label>
+              <input
+                type="file"
+                accept={FILE_INPUT_ACCEPT}
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    void handleFile(e.target.files[0]);
+                  }
+                }}
+              />
+              <Button className="ml-2 mt-4" asChild>
+                <span>カメラで撮影</span>
+              </Button>
+            </label>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="relative">
+              {preview && !isPreviewUnavailable ? (
+                <Image
+                  src={preview}
+                  alt="Preview"
+                  width={800}
+                  height={600}
+                  className="mx-auto max-h-64 w-auto rounded-lg"
+                  unoptimized
+                  onError={() => {
+                    setIsPreviewUnavailable(true);
+                  }}
+                />
+              ) : (
+                <div className="flex h-64 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+                  {isPreviewLoading
+                    ? 'プレビューを読み込み中...'
+                    : 'この形式はプレビュー非対応ですがアップロードできます'}
+                </div>
+              )}
+              <Button
+                variant="destructive"
+                size="icon"
+                className="absolute right-2 top-2"
+                onClick={() => {
+                  resetUploader();
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex justify-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  resetUploader();
+                }}
+              >
+                キャンセル
+              </Button>
+              <Button
+                onClick={handleUpload}
+                disabled={uploadMutation.isPending || isPreviewLoading}
+              >
+                {uploadMutation.isPending
+                  ? 'アップロード中...'
+                  : isPreviewLoading
+                    ? '変換中...'
+                    : 'アップロード'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

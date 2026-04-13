@@ -28,14 +28,10 @@ const subscriptionSchema = z.object({
   serviceName: z.string().min(1, 'サービス名を入力してください').max(255),
   amount: z.coerce.number().positive('金額は正の数で入力してください'),
   billingCycle: z.enum(['monthly', 'yearly']),
-  registrationDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, '日付はYYYY-MM-DD形式で入力してください')
-    .optional(),
   nextPaymentDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, '日付はYYYY-MM-DD形式で入力してください')
-    .optional(),
+    .min(1, '次回支払日を入力してください')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, '日付はYYYY-MM-DD形式で入力してください'),
   category: z.string().max(100).optional(),
   status: z.enum(['active', 'paused', 'cancelled']),
   memo: z.string().optional(),
@@ -84,8 +80,7 @@ export function SubscriptionForm({
       serviceName: subscription?.serviceName || '',
       amount: subscription?.amount || undefined,
       billingCycle: subscription?.billingCycle || 'monthly',
-      registrationDate: subscription ? undefined : new Date().toISOString().slice(0, 10),
-      nextPaymentDate: subscription?.nextPaymentDate?.slice(0, 10),
+      nextPaymentDate: subscription?.nextPaymentDate?.slice(0, 10) || new Date().toISOString().slice(0, 10),
       category: subscription?.category || '',
       status: subscription?.status || 'active',
       memo: subscription?.memo || '',
@@ -97,8 +92,7 @@ export function SubscriptionForm({
       serviceName: subscription?.serviceName || '',
       amount: subscription?.amount || undefined,
       billingCycle: subscription?.billingCycle || 'monthly',
-      registrationDate: subscription ? undefined : new Date().toISOString().slice(0, 10),
-      nextPaymentDate: subscription?.nextPaymentDate?.slice(0, 10),
+      nextPaymentDate: subscription?.nextPaymentDate?.slice(0, 10) || new Date().toISOString().slice(0, 10),
       category: subscription?.category || '',
       status: subscription?.status || 'active',
       memo: subscription?.memo || '',
@@ -188,26 +182,16 @@ export function SubscriptionForm({
               </div>
             </div>
 
-            {subscription ? (
-              <div className="space-y-2">
-                <Label htmlFor="nextPaymentDate">次回支払日</Label>
-                <Input id="nextPaymentDate" type="date" {...register('nextPaymentDate')} />
-                {errors.nextPaymentDate && (
-                  <p className="text-sm text-destructive">{errors.nextPaymentDate.message}</p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="registrationDate">登録日</Label>
-                <Input id="registrationDate" type="date" {...register('registrationDate')} />
-                {errors.registrationDate && (
-                  <p className="text-sm text-destructive">{errors.registrationDate.message}</p>
-                )}
-                <p className="text-sm text-muted-foreground">
-                  登録日を基準に次回支払日を自動設定します。
-                </p>
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="nextPaymentDate">次回支払日</Label>
+              <Input id="nextPaymentDate" type="date" {...register('nextPaymentDate')} />
+              {errors.nextPaymentDate && (
+                <p className="text-sm text-destructive">{errors.nextPaymentDate.message}</p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                OCR確認画面と同じ項目で登録できます。
+              </p>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="category">カテゴリ（任意）</Label>

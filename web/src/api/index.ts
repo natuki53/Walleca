@@ -4,4 +4,6 @@ export { transactionsApi } from './transactions';
 export { receiptsApi } from './receipts';
 export { subscriptionsApi } from './subscriptions';
 export { subscriptionCategoriesApi } from './subscriptionCategories';
+export { transactionCategoriesApi } from './transactionCategories';
+export { settingsApi } from './settings';
 export { notificationsApi } from './notifications';

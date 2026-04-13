@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Upload, X } from 'lucide-react';
 import { isAxiosError } from 'axios';
@@ -197,6 +198,7 @@ async function convertHeicToJpeg(file: File): Promise<Blob> {
 
 export function ReceiptUploader() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -238,10 +240,12 @@ export function ReceiptUploader() {
 
   const uploadMutation = useMutation({
     mutationFn: receiptsApi.upload,
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['receipts'] });
-      toast({ title: 'レシートをアップロードしました' });
+      toast({ title: 'アップロードしました。読み取り中...' });
       resetUploader();
+      const jobId = res.data.jobId;
+      router.push(`/transactions/ocr/${jobId}`);
     },
     onError: (error) => {
       toast({ title: describeUploadError(error), variant: 'destructive' });

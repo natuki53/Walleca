@@ -1,52 +1,81 @@
 import { apiClient } from './client';
 import { ApiResponse } from '@/types/api';
-import {
-  Receipt,
-  UpdateReceiptInput,
-  ConfirmReceiptInput,
-  ReceiptFilters,
-} from '@/types/receipt';
-import { Transaction } from '@/types/transaction';
+
+export interface OcrJobEntry {
+  id: string;
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'confirmed' | 'expired';
+  extractedMerchant: string | null;
+  extractedDate: string | null;
+  extractedTotal: number | null;
+  rawText: string | null;
+  expiresAt: string;
+  processedAt: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateOcrJobResponse {
+  jobId: string;
+  status: string;
+  expiresAt: string;
+}
+
+export interface UpdateReceiptOcrInput {
+  extractedMerchant?: string | null;
+  extractedDate?: string | null;
+  extractedTotal?: number | null;
+}
 
 export const receiptsApi = {
-  getAll: async (filters?: ReceiptFilters): Promise<ApiResponse<Receipt[]>> => {
-    const response = await apiClient.get('/receipts', { params: filters });
-    return response.data;
-  },
-
-  getById: async (id: string): Promise<ApiResponse<Receipt>> => {
-    const response = await apiClient.get(`/receipts/${id}`);
-    return response.data;
-  },
-
-  upload: async (file: File): Promise<ApiResponse<Receipt>> => {
+  // OCR ジョブ作成（アップロード）
+  upload: async (file: File): Promise<ApiResponse<CreateOcrJobResponse>> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await apiClient.post('/receipts', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    const response = await apiClient.post('/receipt-ocr-jobs', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },
 
-  update: async (id: string, input: UpdateReceiptInput): Promise<ApiResponse<Receipt>> => {
-    const response = await apiClient.patch(`/receipts/${id}`, input);
+  // OCR ジョブ取得（ポーリング用）
+  getJob: async (id: string): Promise<ApiResponse<OcrJobEntry>> => {
+    const response = await apiClient.get(`/receipt-ocr-jobs/${id}`);
     return response.data;
   },
 
-  retryOcr: async (id: string): Promise<ApiResponse<Receipt>> => {
-    const response = await apiClient.post(`/receipts/${id}/retry-ocr`);
+  // OCR 結果確定 → Transaction 生成
+  confirm: async (id: string, input: {
+    type?: string;
+    amount: number;
+    transactionDate: string;
+    merchant?: string;
+    categoryId?: string;
+    paymentMethod?: string;
+    memo?: string;
+  }): Promise<ApiResponse<unknown>> => {
+    const response = await apiClient.post(`/receipt-ocr-jobs/${id}/confirm`, input);
+    return response.data;
+  },
+
+  // OCR ジョブ破棄
+  discard: async (id: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await apiClient.delete(`/receipt-ocr-jobs/${id}`);
+    return response.data;
+  },
+
+  update: async (id: string, input: UpdateReceiptOcrInput): Promise<ApiResponse<unknown>> => {
+    const response = await apiClient.patch(`/receipt-ocr-jobs/${id}`, input);
+    return response.data;
+  },
+
+  retryOcr: async (id: string): Promise<ApiResponse<unknown>> => {
+    const response = await apiClient.post(`/receipt-ocr-jobs/${id}/retry`);
     return response.data;
   },
 
   delete: async (id: string): Promise<ApiResponse<{ message: string }>> => {
-    const response = await apiClient.delete(`/receipts/${id}`);
-    return response.data;
-  },
-
-  confirm: async (id: string, input: ConfirmReceiptInput): Promise<ApiResponse<Transaction>> => {
-    const response = await apiClient.post(`/receipts/${id}/confirm`, input);
+    const response = await apiClient.delete(`/receipt-ocr-jobs/${id}`);
     return response.data;
   },
 };

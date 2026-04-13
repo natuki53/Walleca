@@ -19,6 +19,30 @@ describe('extractMerchant', () => {
     expect(extractMerchant(text)).toBe('株式会社テストストア 新宿店');
   });
 
+  test('ignores noisy metadata lines and picks the actual service/store name', () => {
+    const text = [
+      'ご利用明細',
+      '注文番号 A12B34C56',
+      'ChatGPT Plus',
+      '次回請求日 2026/05/12',
+      '月額料金 USD 20.00',
+    ].join('\n');
+
+    expect(extractMerchant(text)).toBe('ChatGPT Plus');
+  });
+
+  test('does not pick numeric or address-like lines as merchant', () => {
+    const text = [
+      '1234ABCD5678',
+      '東京都新宿区西新宿1-2-3',
+      '03-1234-5678',
+      '2026/01/15 13:34',
+      '合計 ¥1,234',
+    ].join('\n');
+
+    expect(extractMerchant(text)).toBeNull();
+  });
+
   test('returns null when merchant-like line is not found', () => {
     const text = [
       'レシート',
@@ -79,6 +103,24 @@ describe('extractDate', () => {
     expect(date?.getMonth()).toBe(1);
     expect(date?.getDate()).toBe(3);
   });
+
+  test('supports english month-name date format', () => {
+    const date = extractDate('Transaction Date May 12, 2026');
+
+    expect(date).not.toBeNull();
+    expect(date?.getFullYear()).toBe(2026);
+    expect(date?.getMonth()).toBe(4);
+    expect(date?.getDate()).toBe(12);
+  });
+
+  test('supports english day-first month-name date format', () => {
+    const date = extractDate('Purchase Date 12 May 2026');
+
+    expect(date).not.toBeNull();
+    expect(date?.getFullYear()).toBe(2026);
+    expect(date?.getMonth()).toBe(4);
+    expect(date?.getDate()).toBe(12);
+  });
 });
 
 describe('extractTotal', () => {
@@ -97,6 +139,28 @@ describe('extractTotal', () => {
       'SUBTOTAL 8.50',
       'TAX 0.85',
       'TOTAL 9.35',
+    ].join('\n');
+
+    expect(extractTotal(text)).toBe(9.35);
+  });
+
+  test('extracts USD total from dollar-formatted amount', () => {
+    const text = [
+      'Sample Store',
+      'SUBTOTAL $8.50',
+      'TAX $0.85',
+      'TOTAL $9.35',
+    ].join('\n');
+
+    expect(extractTotal(text)).toBe(9.35);
+  });
+
+  test('extracts USD total from suffix currency format', () => {
+    const text = [
+      'Sample Store',
+      'SUBTOTAL 8.50 USD',
+      'TAX 0.85 USD',
+      'TOTAL 9.35 USD',
     ].join('\n');
 
     expect(extractTotal(text)).toBe(9.35);

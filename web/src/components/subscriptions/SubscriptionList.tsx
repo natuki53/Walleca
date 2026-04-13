@@ -126,7 +126,7 @@ export function SubscriptionList({ subscriptions, categoryOptions }: Subscriptio
                     </Badge>
                     <Badge variant="outline">{cycleLabels[subscription.billingCycle]}</Badge>
                     {subscription.category && (
-                      <Badge variant="outline">{subscription.category}</Badge>
+                      <Badge variant="outline">{subscription.category.name}</Badge>
                     )}
                   </div>
 

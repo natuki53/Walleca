@@ -1,4 +1,5 @@
 export type TransactionType = 'expense' | 'income' | 'adjustment';
+export type TransactionSummaryGroupBy = 'day' | 'week' | 'month' | 'year';
 
 export interface Transaction {
   id: string;
@@ -6,7 +7,14 @@ export interface Transaction {
   amount: number;
   transactionDate: string;
   merchant: string | null;
-  properties: Record<string, unknown>;
+  categoryId?: string | null;
+  category?: {
+    id: string;
+    name: string;
+  } | null;
+  paymentMethod?: string | null;
+  memo?: string | null;
+  properties?: Record<string, unknown>;
   receiptId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -17,6 +25,9 @@ export interface CreateTransactionInput {
   amount: number;
   transactionDate: string;
   merchant?: string;
+  categoryId?: string;
+  paymentMethod?: string;
+  memo?: string;
   properties?: Record<string, unknown>;
 }
 
@@ -25,11 +36,15 @@ export interface UpdateTransactionInput {
   amount?: number;
   transactionDate?: string;
   merchant?: string | null;
+  categoryId?: string | null;
+  paymentMethod?: string | null;
+  memo?: string | null;
   properties?: Record<string, unknown>;
 }
 
 export interface TransactionFilters {
   type?: TransactionType;
+  categoryId?: string;
   from?: string;
   to?: string;
   merchant?: string;
